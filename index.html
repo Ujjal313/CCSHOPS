@@ -1,8 +1,88 @@
 <!DOCTYPE html>
 <html>
-<head><title>CC Shop</title></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC Shop</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#0b0d15; color:#fff; font-family:system-ui, sans-serif; padding:20px; }
+    .container { max-width:1200px; margin:0 auto; }
+    h1 { font-size:40px; background:linear-gradient(135deg,#a855f7,#3b82f6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:24px; margin:30px 0; }
+    .card { background:#111720; padding:20px; border-radius:16px; border:1px solid #1e2433; }
+    .card button { width:100%; padding:10px; background:#a855f7; border:none; border-radius:40px; color:#fff; cursor:pointer; }
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; }
+    .modal-content { background:#111720; padding:30px; border-radius:20px; max-width:400px; width:90%; }
+    .btn-primary { background:#a855f7; border:none; padding:12px 30px; border-radius:40px; color:#fff; cursor:pointer; }
+  </style>
+</head>
 <body>
-<h1>CC Shop Live</h1>
-<p>If you see this, site is working.</p>
+<div class="container">
+  <h1>⚡ CC Shop</h1>
+  <div id="cardGrid" class="card-grid">Loading...</div>
+</div>
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2>Buy Card</h2>
+    <input type="email" id="email" placeholder="Your email" style="width:100%;padding:10px;margin:10px 0;border-radius:8px;background:#0b0d15;color:#fff;border:1px solid #1e2433;" />
+    <button class="btn-primary" id="payBtn">Pay with UPI</button>
+    <p id="status" style="margin-top:10px;"></p>
+  </div>
+</div>
+<script>
+const API = 'https://ccshop-backend.onrender.com/api';
+async function loadCards() {
+  try {
+    const res = await fetch(API + '/cards');
+    const cards = await res.json();
+    const grid = document.getElementById('cardGrid');
+    if (!cards.length) {
+      grid.innerHTML = '<p>No cards available. Check database.</p>';
+      return;
+    }
+    grid.innerHTML = cards.map(c => '<div class="card"><div>VISA •••• ' + c.card_number.slice(-4) + '</div><div>Limit $' + c.limit_amount + '</div><div>' + c.expiry + '</div><div style="font-size:24px;">$' + c.price + ' USDT</div><button onclick="buy(' + c.id + ', ' + c.price + ')">Buy Now</button></div>').join('');
+  } catch (err) {
+    document.getElementById('cardGrid').innerHTML = '<p style="color:red;">Error: ' + err.message + '</p>';
+  }
+}
+let selectedCardId = null;
+window.buy = function(id, price) {
+  selectedCardId = id;
+  document.getElementById('modal').style.display = 'flex';
+  document.getElementById('status').innerText = 'Price: $' + price + ' USDT';
+};
+document.getElementById('payBtn').onclick = async function() {
+  const email = document.getElementById('email').value;
+  if (!email) return alert('Email required');
+  try {
+    const res = await fetch(API + '/orders', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ cardId: selectedCardId, email, method: 'upi' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('status').innerHTML = 'Order ' + data.orderId + ' created. Pay via UPI: ccshop@upi (SIMULATING...)';
+      setTimeout(async () => {
+        const confirmRes = await fetch(API + '/payment/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ orderId: data.orderId })
+        });
+        const cardData = await confirmRes.json();
+        if (cardData.success) {
+          alert('Card: ' + cardData.card.card_number + '\nCVV: ' + cardData.card.cvv + '\nExpiry: ' + cardData.card.expiry);
+          document.getElementById('modal').style.display = 'none';
+          loadCards();
+        }
+      }, 10000);
+    } else alert('Error: ' + data.error);
+  } catch (err) {
+    alert('Order failed: ' + err.message);
+  }
+};
+loadCards();
+</script>
 </body>
 </html>
